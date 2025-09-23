@@ -1,74 +1,102 @@
 import Queue from 'bull';
-import { getRedis } from '../database/redis';
+import { isRedisEnabled } from '../database/redis';
 import { logger, logQueue } from '../monitoring/logger';
 import { metrics } from '../monitoring/metrics';
+import { IQueue, QueueJob, IQueueManager } from './interface';
+import { BullQueueAdapter, InMemoryQueueAdapter } from './adapters';
+import { InMemoryQueue } from './inMemoryQueue';
 
 // Queue instances
-let notificationQueue: Queue.Queue | null = null;
-let templateQueue: Queue.Queue | null = null;
+let notificationQueue: IQueue | null = null;
+let templateQueue: IQueue | null = null;
 
 export const initializeQueue = async (): Promise<void> => {
   try {
-    const redisConfig = {
-      redis: {
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        host: process.env.REDIS_HOST || 'localhost',
-        password: process.env.REDIS_PASSWORD || undefined,
-      },
-    };
+    if (isRedisEnabled()) {
+      // Initialize Redis-based queues
+      await initializeRedisQueues();
+      logger.info('Queue system initialized with Redis backend');
+    } else {
+      // Initialize in-memory queues
+      initializeInMemoryQueues();
+      logger.info('Queue system initialized with in-memory backend');
+      logger.warn('Running with in-memory queues - jobs will not persist across restarts');
+    }
 
-    // Initialize notification queue
-    notificationQueue = new Queue('notification processing', redisConfig);
-
-    // Initialize template queue
-    templateQueue = new Queue('template rendering', redisConfig);
-
-    // Queue event handlers
+    // Setup event handlers and processors
     setupQueueEventHandlers();
-
-    // Process jobs
     setupJobProcessors();
 
-    logger.info('Queue system initialized successfully');
+    logger.info('Queue system initialization completed successfully');
   } catch (error) {
     logger.error('Failed to initialize queue system:', error);
     throw error;
   }
 };
 
+const initializeRedisQueues = async (): Promise<void> => {
+  const redisConfig = {
+    redis: {
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      host: process.env.REDIS_HOST || 'localhost',
+      password: process.env.REDIS_PASSWORD || undefined,
+    },
+  };
+
+  const bullNotificationQueue = new Queue('notification processing', redisConfig);
+  const bullTemplateQueue = new Queue('template rendering', redisConfig);
+
+  notificationQueue = new BullQueueAdapter(bullNotificationQueue);
+  templateQueue = new BullQueueAdapter(bullTemplateQueue);
+};
+
+const initializeInMemoryQueues = (): void => {
+  const concurrency = parseInt(process.env.QUEUE_CONCURRENCY || '5');
+
+  const inMemoryNotificationQueue = new InMemoryQueue('notification processing', { concurrency });
+  const inMemoryTemplateQueue = new InMemoryQueue('template rendering', { concurrency });
+
+  notificationQueue = new InMemoryQueueAdapter(inMemoryNotificationQueue);
+  templateQueue = new InMemoryQueueAdapter(inMemoryTemplateQueue);
+};
+
 const setupQueueEventHandlers = (): void => {
   if (!notificationQueue || !templateQueue) return;
 
   // Notification queue events
-  notificationQueue.on('completed', (job) => {
+  notificationQueue.on('completed', (job: QueueJob) => {
     logQueue('completed', job.id.toString(), 'notification', {
       processingTime: Date.now() - job.timestamp
     });
     metrics.recordNotificationSent(job.data.channel, 'success');
   });
 
-  notificationQueue.on('failed', (job, err) => {
+  notificationQueue.on('failed', (job: QueueJob, err: Error) => {
     logQueue('failed', job.id.toString(), 'notification', {
       error: err.message,
       attemptsMade: job.attemptsMade,
-      attemptsTotal: job.opts.attempts
+      attemptsTotal: job.opts?.attempts || 3
     });
     metrics.recordNotificationSent(job.data.channel, 'failed');
   });
 
-  notificationQueue.on('stalled', (job) => {
+  notificationQueue.on('stalled', (job: QueueJob) => {
     logQueue('stalled', job.id.toString(), 'notification');
   });
 
   // Template queue events
-  templateQueue.on('completed', (job) => {
+  templateQueue.on('completed', (job: QueueJob) => {
     logQueue('completed', job.id.toString(), 'template');
-    metrics.recordTemplateRender(job.data.templateName, 'success');
+    if (job.data.templateName) {
+      metrics.recordTemplateRender(job.data.templateName, 'success');
+    }
   });
 
-  templateQueue.on('failed', (job, err) => {
+  templateQueue.on('failed', (job: QueueJob, err: Error) => {
     logQueue('failed', job.id.toString(), 'template', { error: err.message });
-    metrics.recordTemplateRender(job.data.templateName, 'failed');
+    if (job.data.templateName) {
+      metrics.recordTemplateRender(job.data.templateName, 'failed');
+    }
   });
 };
 
@@ -76,7 +104,7 @@ const setupJobProcessors = (): void => {
   if (!notificationQueue || !templateQueue) return;
 
   // Process notification jobs
-  notificationQueue.process('send_notification', parseInt(process.env.QUEUE_CONCURRENCY || '5'), async (job) => {
+  notificationQueue.process('send_notification', parseInt(process.env.QUEUE_CONCURRENCY || '5'), async (job: QueueJob) => {
     const { notificationId, channel, recipient, message, templateData } = job.data;
 
     logQueue('processing', job.id.toString(), 'notification', {
@@ -92,7 +120,7 @@ const setupJobProcessors = (): void => {
   });
 
   // Process template rendering jobs
-  templateQueue.process('render_template', parseInt(process.env.QUEUE_CONCURRENCY || '5'), async (job) => {
+  templateQueue.process('render_template', parseInt(process.env.QUEUE_CONCURRENCY || '5'), async (job: QueueJob) => {
     const { templateId, data } = job.data;
 
     logQueue('processing', job.id.toString(), 'template', { templateId });
@@ -115,7 +143,7 @@ export const addNotificationJob = async (
     delay?: number;
     attempts?: number;
   } = {}
-): Promise<Queue.Job> => {
+): Promise<QueueJob> => {
   if (!notificationQueue) {
     throw new Error('Notification queue not initialized');
   }
@@ -151,7 +179,7 @@ export const addNotificationJob = async (
 export const addTemplateJob = async (
   templateId: string,
   data: Record<string, any>
-): Promise<Queue.Job> => {
+): Promise<QueueJob> => {
   if (!templateQueue) {
     throw new Error('Template queue not initialized');
   }
@@ -205,13 +233,8 @@ export const checkQueueHealth = async (): Promise<boolean> => {
       return false;
     }
 
-    // Check if queues are responsive
-    await Promise.all([
-      notificationQueue.getJobCounts(),
-      templateQueue.getJobCounts()
-    ]);
-
-    return true;
+    // Check if queues are healthy
+    return notificationQueue.isHealthy() && templateQueue.isHealthy();
   } catch (error) {
     logger.error('Queue health check failed:', error);
     return false;

@@ -2,8 +2,20 @@ import { Client } from 'pg';
 import { logger } from '../monitoring/logger';
 
 let client: Client | null = null;
+let databaseEnabled: boolean = true;
 
-export const connectDatabase = async (): Promise<Client> => {
+export const isDatabaseEnabled = (): boolean => {
+  return process.env.DATABASE_ENABLED !== 'false' && databaseEnabled;
+};
+
+export const connectDatabase = async (): Promise<Client | null> => {
+  // Check if database is disabled
+  if (process.env.DATABASE_ENABLED === 'false') {
+    logger.info('Database is disabled by configuration (DATABASE_ENABLED=false)');
+    databaseEnabled = false;
+    return null;
+  }
+
   if (client) {
     return client;
   }
@@ -30,17 +42,21 @@ export const connectDatabase = async (): Promise<Client> => {
     // Test the connection
     const result = await client.query('SELECT NOW()');
     logger.info('Database connection test successful', { timestamp: result.rows[0].now });
+    databaseEnabled = true;
 
     return client;
   } catch (error) {
-    logger.error('Failed to connect to PostgreSQL database:', error);
-    throw error;
+    logger.warn('Failed to connect to PostgreSQL database, continuing without database:', error);
+    logger.warn('Service will run with in-memory storage - data will not persist');
+    databaseEnabled = false;
+    client = null;
+    return null;
   }
 };
 
 export const getDatabase = (): Client => {
-  if (!client) {
-    throw new Error('Database not connected. Call connectDatabase() first.');
+  if (!client || !isDatabaseEnabled()) {
+    throw new Error('Database not connected or disabled. Use storage adapter instead.');
   }
   return client;
 };
@@ -56,7 +72,7 @@ export const closeDatabaseConnection = async (): Promise<void> => {
 // Health check function
 export const checkDatabaseHealth = async (): Promise<boolean> => {
   try {
-    if (!client) {
+    if (!client || !isDatabaseEnabled()) {
       return false;
     }
 

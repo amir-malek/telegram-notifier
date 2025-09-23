@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyJWT } from '../../auth/jwt';
 import { validateApiKey } from '../../auth/apiKey';
-import { ClientModel, ApiKeyModel } from '../../database/models';
+import { ClientModel, ApiKeyModel } from '../../models';
 import { AuthenticationError } from './errorHandler';
 import { logger } from '../../monitoring/logger';
 import { metrics } from '../../monitoring/metrics';

@@ -2,7 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { logger } from '../monitoring/logger';
 import { metrics } from '../monitoring/metrics';
 import { TemplateEngine, RenderedTemplate } from '../templates/engine';
-import { NotificationModel, DeliveryLogModel } from '../database/models';
+import { NotificationModel, DeliveryLogModel } from '../models';
 
 export interface TelegramConfig {
   botToken: string;
@@ -191,7 +191,7 @@ export class TelegramChannel {
       // Log delivery attempt
       await DeliveryLogModel.create({
         notificationId,
-        attempt: notification.retryCount + 1,
+        attempt: (notification.retryCount || 0) + 1,
         status: result.success ? 'success' : 'failed',
         responseData: result.messageId ? { messageId: result.messageId } : undefined,
         errorMessage: result.error,
@@ -214,22 +214,22 @@ export class TelegramChannel {
         });
       } else {
         // Update notification as failed or retry
-        const shouldRetry = notification.retryCount < notification.maxRetries &&
+        const shouldRetry = (notification.retryCount || 0) < (notification.maxRetries || 3) &&
                            result.error !== 'Bot was blocked by the user or chat not found';
 
         if (shouldRetry) {
           await NotificationModel.incrementRetryCount(notificationId);
           logger.warn('Notification failed, will retry', {
             notificationId,
-            attempt: notification.retryCount + 1,
-            maxRetries: notification.maxRetries,
+            attempt: (notification.retryCount || 0) + 1,
+            maxRetries: notification.maxRetries || 3,
             error: result.error
           });
         } else {
           await NotificationModel.updateStatus(notificationId, 'failed', result.error);
           logger.error('Notification failed permanently', {
             notificationId,
-            attempts: notification.retryCount + 1,
+            attempts: (notification.retryCount || 0) + 1,
             error: result.error
           });
         }

@@ -160,7 +160,7 @@ export class TemplateEngine {
           noEscape: template.channel === 'html', // Don't escape HTML for HTML templates
         });
 
-        this.compiledTemplates.set(cacheKey);
+        this.compiledTemplates.set(cacheKey, compiledTemplate);
 
         // Clean up old compiled templates
         if (this.compiledTemplates.size > 1000) {

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { NotificationModel, TemplateModel, DeliveryLogModel } from '../../database/models';
+import { NotificationModel, TemplateModel, DeliveryLogModel } from '../../models';
 import { addNotificationJob } from '../../queue/manager';
 import { TelegramChannel } from '../../channels/telegram';
 import { TemplateEngine } from '../../templates/engine';
@@ -398,8 +398,8 @@ export const getNotificationHistory = asyncHandler(async (req: AuthenticatedRequ
   res.json({
     notificationId: id,
     status: notification.status,
-    attempts: notification.retryCount + 1,
-    maxRetries: notification.maxRetries,
+    attempts: (notification.retryCount || 0) + 1,
+    maxRetries: notification.maxRetries || 3,
     history: deliveryLogs.map(log => ({
       attempt: log.attempt,
       status: log.status,

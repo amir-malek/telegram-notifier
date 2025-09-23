@@ -1,3 +1,5 @@
+import { Request } from 'express';
+
 export interface Client {
   id: string;
   name: string;
@@ -13,15 +15,18 @@ export interface Notification {
   clientId: string;
   channel: string;
   recipient: string;
-  message: string;
+  message?: string;
   templateId?: string;
   templateData?: Record<string, any>;
   priority: 'high' | 'medium' | 'low';
-  status: 'pending' | 'sent' | 'failed' | 'cancelled';
+  status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed' | 'cancelled';
   scheduledAt?: Date;
-  sentAt?: Date;
-  failedAt?: Date;
-  errorMessage?: string;
+  sentAt?: Date | null;
+  failedAt?: Date | null;
+  errorMessage?: string | null;
+  retryCount?: number;
+  maxRetries?: number;
+  externalId?: string;
   metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
@@ -55,7 +60,7 @@ export interface DeliveryLog {
   id: string;
   notificationId: string;
   attempt: number;
-  status: 'success' | 'failed' | 'retry';
+  status: 'success' | 'failed' | 'retry' | 'timeout';
   errorMessage?: string;
   responseData?: Record<string, any>;
   timestamp: Date;
@@ -71,6 +76,7 @@ export interface RateLimit {
 export interface NotificationRequest {
   channel: string;
   recipient: string;
+  subject?: string;
   message?: string;
   template?: string;
   data?: Record<string, any>;
@@ -84,6 +90,8 @@ export interface BatchNotificationRequest {
   template?: string;
   notifications: {
     recipient: string;
+    subject?: string;
+    message?: string;
     data?: Record<string, any>;
     metadata?: Record<string, any>;
   }[];
@@ -214,4 +222,20 @@ export interface WebhookConfig {
   url: string;
   headers?: Record<string, string>;
   method?: 'POST' | 'PUT' | 'PATCH';
+}
+
+// API Key data structure
+export interface ApiKeyData {
+  keyId: string;
+  clientId: string;
+  hashedKey: string;
+  prefix: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  isActive: boolean;
+}
+
+// Authenticated request with client attached
+export interface AuthenticatedRequest extends Request {
+  client?: Client | null;
 }

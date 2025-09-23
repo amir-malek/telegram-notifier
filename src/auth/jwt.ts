@@ -17,11 +17,12 @@ if (!REFRESH_TOKEN_SECRET) {
 
 export const generateAccessToken = (payload: Omit<AuthTokenPayload, 'iat' | 'exp'>): string => {
   try {
-    return jwt.sign(payload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
+    const options: jwt.SignOptions = {
+      expiresIn: JWT_EXPIRES_IN as any,
       issuer: 'notification-service',
       audience: 'notification-api'
-    });
+    };
+    return jwt.sign(payload, JWT_SECRET!, options);
   } catch (error) {
     logger.error('Failed to generate access token:', error);
     throw new Error('Token generation failed');
@@ -30,14 +31,15 @@ export const generateAccessToken = (payload: Omit<AuthTokenPayload, 'iat' | 'exp
 
 export const generateRefreshToken = (clientId: string): string => {
   try {
+    const options: jwt.SignOptions = {
+      expiresIn: REFRESH_TOKEN_EXPIRES_IN as any,
+      issuer: 'notification-service',
+      audience: 'notification-api'
+    };
     return jwt.sign(
       { clientId, type: 'refresh' },
-      REFRESH_TOKEN_SECRET,
-      {
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
-        issuer: 'notification-service',
-        audience: 'notification-api'
-      }
+      REFRESH_TOKEN_SECRET!,
+      options
     );
   } catch (error) {
     logger.error('Failed to generate refresh token:', error);
@@ -47,7 +49,7 @@ export const generateRefreshToken = (clientId: string): string => {
 
 export const verifyAccessToken = (token: string): AuthTokenPayload => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, {
+    const decoded = jwt.verify(token, JWT_SECRET!, {
       issuer: 'notification-service',
       audience: 'notification-api'
     }) as AuthTokenPayload;
@@ -65,9 +67,12 @@ export const verifyAccessToken = (token: string): AuthTokenPayload => {
   }
 };
 
+// Alias for backward compatibility
+export const verifyJWT = verifyAccessToken;
+
 export const verifyRefreshToken = (token: string): { clientId: string; type: string } => {
   try {
-    const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET, {
+    const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET!, {
       issuer: 'notification-service',
       audience: 'notification-api'
     }) as { clientId: string; type: string };

@@ -128,13 +128,15 @@ export const errorHandler = (
   if (error.name === 'JsonWebTokenError') {
     errorResponse.error = 'Invalid token';
     errorResponse.code = 'INVALID_TOKEN';
-    return res.status(401).json(errorResponse);
+    res.status(401).json(errorResponse);
+    return;
   }
 
   if (error.name === 'TokenExpiredError') {
     errorResponse.error = 'Token expired';
     errorResponse.code = 'TOKEN_EXPIRED';
-    return res.status(401).json(errorResponse);
+    res.status(401).json(errorResponse);
+    return;
   }
 
   // Handle MongoDB/PostgreSQL errors
@@ -149,7 +151,8 @@ export const errorHandler = (
   if (error instanceof SyntaxError && 'body' in error) {
     errorResponse.error = 'Invalid JSON format';
     errorResponse.code = 'INVALID_JSON';
-    return res.status(400).json(errorResponse);
+    res.status(400).json(errorResponse);
+    return;
   }
 
   res.status(statusCode).json(errorResponse);

@@ -7,8 +7,9 @@ import { createServer } from 'http';
 
 import { logger } from './monitoring/logger';
 import { connectDatabase } from './database/connection';
-import { connectRedis } from './database/redis';
-import { initializeQueue } from './queue/manager';
+import { connectRedis, closeRedisConnection } from './database/redis';
+import { initializeQueue, getQueues } from './queue/manager';
+import { initializeStorage, closeStorage, getStorageMode } from './storage/manager';
 import { apiRouter } from './api';
 import { errorHandler } from './api/middleware/errorHandler';
 
@@ -65,14 +66,22 @@ app.use('*', (req, res) => {
 
 async function startServer() {
   try {
-    // Initialize database connections
-    logger.info('Connecting to database...');
-    await connectDatabase();
+    // Initialize storage (database or in-memory)
+    logger.info('Initializing storage...');
+    const storageMode = process.env.STORAGE_MODE || 'auto';
+    await initializeStorage(storageMode as any);
 
+    // Try to connect to Redis (optional)
     logger.info('Connecting to Redis...');
-    await connectRedis();
+    const redisConnection = await connectRedis();
 
-    // Initialize queue system
+    if (redisConnection) {
+      logger.info('Redis connected successfully');
+    } else {
+      logger.warn('Redis connection skipped or failed - continuing with in-memory alternatives');
+    }
+
+    // Initialize queue system (will use Redis or in-memory based on availability)
     logger.info('Initializing queue system...');
     await initializeQueue();
 
@@ -81,10 +90,16 @@ async function startServer() {
     const host = process.env.HOST || 'localhost';
 
     server.listen(port, host, () => {
+      const currentStorageMode = getStorageMode();
       logger.info(`🚀 Notification Service started successfully`);
       logger.info(`📡 Server running on http://${host}:${port}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`💾 Storage: ${currentStorageMode}`);
       logger.info(`📊 Metrics available on port ${process.env.PROMETHEUS_PORT || '9090'}`);
+
+      if (currentStorageMode === 'memory') {
+        logger.warn('⚠️  Running in memory-only mode - data will not persist across restarts');
+      }
     });
 
     // Graceful shutdown handling
@@ -95,15 +110,32 @@ async function startServer() {
         logger.info('HTTP server closed');
       });
 
-      // Add cleanup logic here
-      // - Close database connections
-      // - Close Redis connection
-      // - Wait for queue jobs to complete
+      try {
+        // Close queue connections
+        const { notificationQueue, templateQueue } = getQueues();
+        if (notificationQueue) {
+          logger.info('Closing notification queue...');
+          await notificationQueue.close();
+        }
+        if (templateQueue) {
+          logger.info('Closing template queue...');
+          await templateQueue.close();
+        }
 
-      setTimeout(() => {
-        logger.error('Forcing shutdown');
+        // Close Redis connection
+        logger.info('Closing Redis connection...');
+        await closeRedisConnection();
+
+        // Close storage connections
+        logger.info('Closing storage connections...');
+        await closeStorage();
+
+        logger.info('Graceful shutdown completed');
+        process.exit(0);
+      } catch (error) {
+        logger.error('Error during graceful shutdown:', error);
         process.exit(1);
-      }, 10000); // Force shutdown after 10 seconds
+      }
     };
 
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

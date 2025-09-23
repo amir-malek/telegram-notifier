@@ -2,18 +2,9 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../monitoring/logger';
+import { ApiKeyData } from '../types';
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
-
-export interface ApiKeyData {
-  keyId: string;
-  clientId: string;
-  hashedKey: string;
-  prefix: string;
-  createdAt: Date;
-  lastUsedAt?: Date;
-  isActive: boolean;
-}
 
 export const generateApiKey = (): { keyId: string; apiKey: string; prefix: string } => {
   try {
@@ -129,4 +120,40 @@ export const generateRateLimitKey = (clientId: string): string => {
 
 export const generateApiKeyUsageKey = (keyId: string): string => {
   return `api_key_usage:${keyId}`;
+};
+
+// Validate API key and return key data
+export const validateApiKey = async (apiKey: string): Promise<{ isValid: boolean; keyData?: ApiKeyData }> => {
+  try {
+    // First check the format
+    if (!isValidApiKeyFormat(apiKey)) {
+      return { isValid: false };
+    }
+
+    // Get the prefix to look up the key
+    const prefix = getApiKeyPrefix(apiKey);
+    if (!prefix) {
+      return { isValid: false };
+    }
+
+    // Import here to avoid circular dependency
+    const { ApiKeyModel } = await import('../models');
+
+    // Find the key by prefix
+    const keyData = await ApiKeyModel.findByPrefix(prefix);
+    if (!keyData || !keyData.isActive) {
+      return { isValid: false };
+    }
+
+    // Verify the key hash
+    const isValid = await verifyApiKey(apiKey, keyData.hashedKey);
+    if (!isValid) {
+      return { isValid: false };
+    }
+
+    return { isValid: true, keyData };
+  } catch (error) {
+    logger.error('Failed to validate API key:', error);
+    return { isValid: false };
+  }
 };

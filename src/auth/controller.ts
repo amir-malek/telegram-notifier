@@ -280,8 +280,7 @@ export const getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Re
     };
 
     res.json({
-      client: clientData,
-      authMethod: req.authMethod
+      client: clientData
     });
 
   } catch (error) {

@@ -1,7 +1,7 @@
 import { Express } from 'express';
 import { metricsHandler } from '../monitoring/metrics';
 import { checkDatabaseHealth } from '../database/connection';
-import { checkRedisHealth } from '../database/redis';
+import { checkRedisHealth, isRedisEnabled } from '../database/redis';
 import { checkQueueHealth } from '../queue/manager';
 import authRoutes from '../auth/routes';
 
@@ -21,18 +21,55 @@ export const setupRoutes = (app: Express): void => {
         checkQueueHealth()
       ]);
 
-      const isHealthy = dbHealth && redisHealth && queueHealth;
+      const redisStatus = isRedisEnabled() ? (redisHealth ? 'up' : 'down') : 'disabled';
 
-      res.status(isHealthy ? 200 : 503).json({
-        status: isHealthy ? 'healthy' : 'unhealthy',
+      // Service is healthy if DB and queues are working
+      // Redis is optional - service can be degraded but still functional
+      const criticalServicesHealthy = dbHealth && queueHealth;
+      const allServicesHealthy = criticalServicesHealthy && redisHealth;
+
+      let status: string;
+      let statusCode: number;
+
+      if (criticalServicesHealthy) {
+        if (allServicesHealthy || !isRedisEnabled()) {
+          status = 'healthy';
+          statusCode = 200;
+        } else {
+          status = 'degraded'; // Redis is down but service still functional
+          statusCode = 200;
+        }
+      } else {
+        status = 'unhealthy';
+        statusCode = 503;
+      }
+
+      const response: any = {
+        status,
         timestamp: new Date().toISOString(),
         version: process.env.npm_package_version || '1.0.0',
         services: {
           database: dbHealth ? 'up' : 'down',
-          redis: redisHealth ? 'up' : 'down',
+          redis: redisStatus,
           queue: queueHealth ? 'up' : 'down'
         }
-      });
+      };
+
+      // Add warnings for degraded mode
+      if (status === 'degraded' || !isRedisEnabled()) {
+        response.warnings = [];
+
+        if (!isRedisEnabled()) {
+          response.warnings.push('Redis is disabled - using in-memory alternatives');
+          response.warnings.push('Rate limiting is per-instance only');
+          response.warnings.push('Queue data will not persist across restarts');
+        } else if (!redisHealth) {
+          response.warnings.push('Redis connection failed - falling back to in-memory alternatives');
+          response.warnings.push('Service functionality may be limited');
+        }
+      }
+
+      res.status(statusCode).json(response);
     } catch (error) {
       res.status(503).json({
         status: 'unhealthy',

@@ -72,6 +72,13 @@ const templateRenders = new client.Counter({
   registers: [register]
 });
 
+const authEvents = new client.Counter({
+  name: 'auth_events_total',
+  help: 'Total number of authentication events',
+  labelNames: ['method', 'status'],
+  registers: [register]
+});
+
 // Middleware to collect HTTP metrics
 export const metricsMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const startTime = Date.now();
@@ -140,6 +147,11 @@ export const metrics = {
   // Template metrics
   recordTemplateRender: (templateName: string, status: 'success' | 'failed') => {
     templateRenders.labels(templateName, status).inc();
+  },
+
+  // Authentication metrics
+  recordAuthEvent: (method: 'jwt' | 'apikey', status: 'success' | 'failed') => {
+    authEvents.labels(method, status).inc();
   },
 
   // Get all metrics
