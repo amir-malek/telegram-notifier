@@ -1,0 +1,113 @@
+import { Client } from 'pg';
+import { logger } from '../monitoring/logger';
+
+let client: Client | null = null;
+
+export const connectDatabase = async (): Promise<Client> => {
+  if (client) {
+    return client;
+  }
+
+  try {
+    const connectionConfig = {
+      connectionString: process.env.DATABASE_URL,
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'notification_service',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'password',
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 20, // Maximum number of clients in the pool
+      idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+      connectionTimeoutMillis: 10000, // Return an error if connection takes longer than 10 seconds
+    };
+
+    client = new Client(connectionConfig);
+    await client.connect();
+
+    logger.info('Connected to PostgreSQL database successfully');
+
+    // Test the connection
+    const result = await client.query('SELECT NOW()');
+    logger.info('Database connection test successful', { timestamp: result.rows[0].now });
+
+    return client;
+  } catch (error) {
+    logger.error('Failed to connect to PostgreSQL database:', error);
+    throw error;
+  }
+};
+
+export const getDatabase = (): Client => {
+  if (!client) {
+    throw new Error('Database not connected. Call connectDatabase() first.');
+  }
+  return client;
+};
+
+export const closeDatabaseConnection = async (): Promise<void> => {
+  if (client) {
+    await client.end();
+    client = null;
+    logger.info('Database connection closed');
+  }
+};
+
+// Health check function
+export const checkDatabaseHealth = async (): Promise<boolean> => {
+  try {
+    if (!client) {
+      return false;
+    }
+
+    await client.query('SELECT 1');
+    return true;
+  } catch (error) {
+    logger.error('Database health check failed:', error);
+    return false;
+  }
+};
+
+// Query helper with error handling and metrics
+export const query = async (text: string, params?: any[]): Promise<any> => {
+  const start = Date.now();
+
+  try {
+    const db = getDatabase();
+    const result = await db.query(text, params);
+
+    const duration = Date.now() - start;
+    logger.debug('Query executed successfully', {
+      query: text.substring(0, 100),
+      duration: `${duration}ms`,
+      rowCount: result.rowCount
+    });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - start;
+    logger.error('Query execution failed', {
+      query: text.substring(0, 100),
+      duration: `${duration}ms`,
+      error: (error as Error).message
+    });
+    throw error;
+  }
+};
+
+// Transaction helper
+export const withTransaction = async <T>(
+  callback: (client: Client) => Promise<T>
+): Promise<T> => {
+  const db = getDatabase();
+
+  try {
+    await db.query('BEGIN');
+    const result = await callback(db);
+    await db.query('COMMIT');
+    return result;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  }
+};

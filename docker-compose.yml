@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Notification Service API
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=notification_service
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - DB_SSL=false
+
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis123
+
+      # JWT
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_EXPIRES_IN=7d
+
+      # API Keys
+      - API_KEY_SECRET=your-super-secret-api-key-change-in-production
+
+      # Telegram
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+
+      # Rate Limiting
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=1000
+
+      # CORS
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+      # Logging
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - notification-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: notification-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=notification_service
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - notification-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: notification-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis123 --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - notification-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus (Optional - for metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: notification-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - notification-network
+    profiles:
+      - monitoring
+
+  # Grafana (Optional - for dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: notification-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - notification-network
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  notification-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

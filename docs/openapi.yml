@@ -1,0 +1,932 @@
+openapi: 3.0.3
+info:
+  title: Notification Service API
+  description: |
+    Multi-channel notification service with template support and queue management.
+
+    ## Authentication
+
+    This API supports two authentication methods:
+    - **JWT Bearer Tokens**: For session-based authentication
+    - **API Keys**: For service-to-service communication
+
+    ### JWT Authentication
+    ```
+    Authorization: Bearer <jwt_token>
+    ```
+
+    ### API Key Authentication
+    ```
+    Authorization: ApiKey <api_key>
+    ```
+
+    ## Rate Limiting
+
+    Different endpoints have different rate limits:
+    - General API: 1000 requests per 15 minutes per IP
+    - Notifications: 100 requests per minute per client
+    - Batch notifications: 10 requests per minute per client
+
+    ## Supported Channels
+
+    - **Telegram**: Send messages via Telegram bot
+    - **Slack**: Send messages to Slack channels (coming soon)
+    - **Discord**: Send messages to Discord channels (coming soon)
+    - **Email**: Send HTML/text emails (coming soon)
+    - **SMS**: Send text messages (coming soon)
+    - **Webhook**: HTTP POST to custom endpoints (coming soon)
+
+  version: 1.0.0
+  contact:
+    name: Notification Service API
+    email: support@notification.local
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://notifications.yourdomain.com/api
+    description: Production server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  # Health Check
+  /health:
+    get:
+      summary: Health check
+      description: Check if the service is running and healthy
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  service:
+                    type: string
+                    example: notification-service
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  # Send single notification
+  /notifications:
+    post:
+      summary: Send a single notification
+      description: Queue a single notification for delivery
+      tags:
+        - Notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendNotificationRequest'
+            examples:
+              telegram_with_template:
+                summary: Telegram notification with template
+                value:
+                  channel: telegram
+                  recipient: "@username"
+                  template: "550e8400-e29b-41d4-a716-446655440000"
+                  data:
+                    title: "Senior Backend Developer"
+                    company: "TechCorp"
+                    location: "Tehran, Iran"
+                    salary: "$80,000 - $120,000"
+                    url: "https://jobs.techcorp.com/senior-backend"
+                  priority: high
+              telegram_with_message:
+                summary: Telegram notification with direct message
+                value:
+                  channel: telegram
+                  recipient: "123456789"
+                  message: "Hello! This is a test notification."
+                  priority: medium
+              scheduled_notification:
+                summary: Scheduled notification
+                value:
+                  channel: telegram
+                  recipient: "@username"
+                  message: "Scheduled reminder message"
+                  scheduledAt: "2024-12-25T10:00:00Z"
+                  priority: low
+      responses:
+        '201':
+          description: Notification queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+    get:
+      summary: Get notifications
+      description: Retrieve a list of notifications with optional filtering
+      tags:
+        - Notifications
+      parameters:
+        - name: status
+          in: query
+          description: Filter by notification status
+          schema:
+            type: string
+            enum: [pending, queued, processing, sent, failed, cancelled]
+        - name: channel
+          in: query
+          description: Filter by notification channel
+          schema:
+            type: string
+            enum: [telegram, slack, discord, email, sms, webhook]
+        - name: priority
+          in: query
+          description: Filter by priority
+          schema:
+            type: string
+            enum: [high, medium, low]
+        - name: from
+          in: query
+          description: Filter notifications created after this date
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter notifications created before this date
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Maximum number of notifications to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+        - name: offset
+          in: query
+          description: Number of notifications to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Send batch notifications
+  /notifications/batch:
+    post:
+      summary: Send batch notifications
+      description: Queue multiple notifications for delivery with batch processing
+      tags:
+        - Notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchNotificationRequest'
+            example:
+              channel: telegram
+              template: "550e8400-e29b-41d4-a716-446655440000"
+              notifications:
+                - recipient: "@user1"
+                  data:
+                    title: "Backend Developer"
+                    company: "StartupXYZ"
+                    location: "Remote"
+                - recipient: "@user2"
+                  data:
+                    title: "Frontend Developer"
+                    company: "BigTech"
+                    location: "San Francisco"
+              options:
+                batchSize: 5
+                delayBetween: 2000
+                deduplicate: true
+      responses:
+        '201':
+          description: Batch notifications processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchNotificationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  # Schedule notification
+  /notifications/schedule:
+    post:
+      summary: Schedule a notification
+      description: Schedule a notification for future delivery
+      tags:
+        - Notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleNotificationRequest'
+            example:
+              channel: telegram
+              recipient: "@username"
+              scheduledAt: "2024-12-25T10:00:00Z"
+              message: "Merry Christmas! 🎄"
+              priority: medium
+      responses:
+        '201':
+          description: Notification scheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledNotificationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  # Get notification statistics
+  /notifications/stats:
+    get:
+      summary: Get notification statistics
+      description: Retrieve statistics about notification delivery for the authenticated client
+      tags:
+        - Notifications
+      parameters:
+        - name: from
+          in: query
+          description: Start date for statistics
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End date for statistics
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Notification statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationStatsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Get specific notification
+  /notifications/{id}:
+    get:
+      summary: Get notification details
+      description: Retrieve details of a specific notification
+      tags:
+        - Notifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Notification ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    delete:
+      summary: Cancel notification
+      description: Cancel a pending or queued notification
+      tags:
+        - Notifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Notification ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: cancelled
+                  message:
+                    type: string
+                    example: Notification cancelled successfully
+        '400':
+          description: Cannot cancel notification (wrong status)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Get notification history
+  /notifications/{id}/history:
+    get:
+      summary: Get notification delivery history
+      description: Retrieve the delivery history and retry attempts for a specific notification
+      tags:
+        - Notifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Notification ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification delivery history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationHistoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for session-based authentication
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ApiKey
+      description: |
+        API key for service-to-service authentication.
+        Format: `Authorization: ApiKey nf_xxxxxxxxxxxxxxxx`
+
+  schemas:
+    # Request schemas
+    SendNotificationRequest:
+      type: object
+      required:
+        - channel
+        - recipient
+      properties:
+        channel:
+          type: string
+          enum: [telegram, slack, discord, email, sms, webhook]
+          description: Notification channel to use
+        recipient:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Recipient identifier (username, email, phone, etc.)
+        subject:
+          type: string
+          maxLength: 255
+          description: Subject line (for email notifications)
+        message:
+          type: string
+          maxLength: 10000
+          description: Message content (required if no template)
+        template:
+          type: string
+          format: uuid
+          description: Template ID (required if no message)
+        data:
+          type: object
+          additionalProperties: true
+          description: Template variables (when using templates)
+        priority:
+          type: string
+          enum: [high, medium, low]
+          default: medium
+          description: Notification priority
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Schedule notification for future delivery
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the notification
+      example:
+        channel: telegram
+        recipient: "@username"
+        template: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          title: "Software Engineer"
+          company: "TechCorp"
+          location: "Tehran"
+        priority: high
+
+    BatchNotificationRequest:
+      type: object
+      required:
+        - channel
+        - notifications
+      properties:
+        channel:
+          type: string
+          enum: [telegram, slack, discord, email, sms, webhook]
+        template:
+          type: string
+          format: uuid
+          description: Template to use for all notifications
+        notifications:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required:
+              - recipient
+            properties:
+              recipient:
+                type: string
+                minLength: 1
+                maxLength: 500
+              subject:
+                type: string
+                maxLength: 255
+              message:
+                type: string
+                maxLength: 10000
+              data:
+                type: object
+                additionalProperties: true
+              metadata:
+                type: object
+                additionalProperties: true
+        options:
+          type: object
+          properties:
+            deduplicate:
+              type: boolean
+              default: false
+              description: Remove duplicate notifications
+            batchSize:
+              type: integer
+              minimum: 1
+              maximum: 100
+              default: 10
+              description: Number of notifications to process at once
+            delayBetween:
+              type: integer
+              minimum: 0
+              maximum: 60000
+              default: 1000
+              description: Delay between batches in milliseconds
+
+    ScheduleNotificationRequest:
+      allOf:
+        - $ref: '#/components/schemas/SendNotificationRequest'
+        - type: object
+          required:
+            - scheduledAt
+          properties:
+            scheduledAt:
+              type: string
+              format: date-time
+              description: Future date and time for delivery
+
+    # Response schemas
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique notification ID
+        status:
+          type: string
+          enum: [queued, scheduled]
+          description: Current notification status
+        channel:
+          type: string
+          description: Notification channel
+        recipient:
+          type: string
+          description: Recipient identifier
+        priority:
+          type: string
+          enum: [high, medium, low]
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Scheduled delivery time (if scheduled)
+        createdAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+          example: Notification queued successfully
+
+    BatchNotificationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Batch notifications processed
+        summary:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total notifications in batch
+            successful:
+              type: integer
+              description: Successfully queued notifications
+            failed:
+              type: integer
+              description: Failed notifications
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              recipient:
+                type: string
+              id:
+                type: string
+                format: uuid
+                nullable: true
+              status:
+                type: string
+                enum: [queued, error]
+              error:
+                type: string
+                nullable: true
+
+    ScheduledNotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: scheduled
+        scheduledAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+          example: Notification scheduled successfully
+
+    NotificationListResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        pagination:
+          type: object
+          properties:
+            limit:
+              type: integer
+            offset:
+              type: integer
+            total:
+              type: integer
+
+    NotificationDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Notification'
+        - type: object
+          properties:
+            deliveryLogs:
+              type: array
+              items:
+                $ref: '#/components/schemas/DeliveryLog'
+
+    NotificationHistoryResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        attempts:
+          type: integer
+          description: Number of delivery attempts
+        maxRetries:
+          type: integer
+          description: Maximum retry attempts
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              attempt:
+                type: integer
+              status:
+                type: string
+                enum: [success, failed, retry, timeout]
+              timestamp:
+                type: string
+                format: date-time
+              errorMessage:
+                type: string
+                nullable: true
+              responseData:
+                type: object
+                nullable: true
+
+    NotificationStatsResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total notifications
+            sent:
+              type: integer
+              description: Successfully sent notifications
+            failed:
+              type: integer
+              description: Failed notifications
+            pending:
+              type: integer
+              description: Pending/queued notifications
+            successRate:
+              type: integer
+              description: Success rate percentage
+        byChannel:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              total:
+                type: integer
+              sent:
+                type: integer
+              failed:
+                type: integer
+              pending:
+                type: integer
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+
+    # Entity schemas
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        recipient:
+          type: string
+        message:
+          type: string
+          nullable: true
+        templateId:
+          type: string
+          format: uuid
+          nullable: true
+        templateData:
+          type: object
+          nullable: true
+        priority:
+          type: string
+          enum: [high, medium, low]
+        status:
+          type: string
+          enum: [pending, queued, processing, sent, failed, cancelled]
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        failedAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeliveryLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        notificationId:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+        status:
+          type: string
+          enum: [success, failed, retry, timeout]
+        errorMessage:
+          type: string
+          nullable: true
+        responseData:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+          description: Request path that caused the error
+        method:
+          type: string
+          description: HTTP method
+        requestId:
+          type: string
+          description: Unique request identifier
+
+  responses:
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ErrorResponse'
+              - type: object
+                properties:
+                  validationErrors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        message:
+                          type: string
+                        value:
+                          type: string
+          example:
+            error: Validation failed
+            code: VALIDATION_ERROR
+            timestamp: "2024-01-01T12:00:00Z"
+            path: "/api/notifications"
+            method: "POST"
+            validationErrors:
+              - field: "channel"
+                message: "Channel must be one of: telegram, slack, discord, email, sms, webhook"
+                value: "invalid_channel"
+
+    UnauthorizedError:
+      description: Authentication required or failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Invalid or expired token"
+            code: "AUTHENTICATION_ERROR"
+            timestamp: "2024-01-01T12:00:00Z"
+            path: "/api/notifications"
+            method: "POST"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Notification not found"
+            code: "NOT_FOUND_ERROR"
+            timestamp: "2024-01-01T12:00:00Z"
+            path: "/api/notifications/123e4567-e89b-12d3-a456-426614174000"
+            method: "GET"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ErrorResponse'
+              - type: object
+                properties:
+                  retryAfter:
+                    type: integer
+                    description: Seconds to wait before retrying
+      headers:
+        RateLimit-Limit:
+          description: Request limit per window
+          schema:
+            type: integer
+        RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+        RateLimit-Reset:
+          description: Window reset time
+          schema:
+            type: string
+            format: date-time
+      example:
+        error: "Rate limit exceeded"
+        code: "RATE_LIMIT_ERROR"
+        timestamp: "2024-01-01T12:00:00Z"
+        path: "/api/notifications"
+        method: "POST"
+        retryAfter: 60
+
+tags:
+  - name: Health
+    description: Service health and status endpoints
+  - name: Notifications
+    description: Notification management and delivery
