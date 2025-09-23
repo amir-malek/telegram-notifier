@@ -122,9 +122,29 @@ export const generateApiKeyUsageKey = (keyId: string): string => {
   return `api_key_usage:${keyId}`;
 };
 
+// Default API key for testing/development
+const DEFAULT_API_KEY = 'nf_default_dev_key_12345678';
+
 // Validate API key and return key data
 export const validateApiKey = async (apiKey: string): Promise<{ isValid: boolean; keyData?: ApiKeyData }> => {
   try {
+    // Check for default API key (always valid for development)
+    if (apiKey === DEFAULT_API_KEY) {
+      logger.info('Using default development API key');
+      return {
+        isValid: true,
+        keyData: {
+          keyId: 'default-key-id',
+          clientId: 'default-client-id',
+          hashedKey: 'default-hash',
+          prefix: 'default_d',
+          isActive: true,
+          createdAt: new Date(),
+          lastUsedAt: new Date()
+        }
+      };
+    }
+
     // First check the format
     if (!isValidApiKeyFormat(apiKey)) {
       return { isValid: false };

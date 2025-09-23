@@ -60,14 +60,27 @@ export async function authenticateRequest(
           throw new AuthenticationError('Invalid API key');
         }
 
-        client = await ClientModel.findById(keyData.clientId);
+        // Handle default client for development
+        if (keyData.clientId === 'default-client-id') {
+          client = {
+            id: 'default-client-id',
+            name: 'Default Development Client',
+            email: 'dev@example.com',
+            rateLimit: 1000,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+        } else {
+          client = await ClientModel.findById(keyData.clientId);
 
-        if (!client) {
-          throw new AuthenticationError('Invalid API key: client not found');
+          if (!client) {
+            throw new AuthenticationError('Invalid API key: client not found');
+          }
+
+          // Update last used timestamp for non-default keys
+          await ApiKeyModel.updateLastUsed(keyData.keyId);
         }
-
-        // Update last used timestamp
-        await ApiKeyModel.updateLastUsed(keyData.keyId);
 
         logger.debug('API key authentication successful', {
           clientId: client.id,
