@@ -6,6 +6,7 @@ import { ValidationError, NotFoundError } from '../api/middleware/errorHandler';
 import { asyncHandler } from '../api/middleware/errorHandler';
 import { logAuth, logger } from '../monitoring/logger';
 import { RegisterClientRequest, ClientResponse, AuthenticatedRequest } from '../types';
+import { ClientModel, ApiKeyModel } from '../models';
 
 // TODO: Replace with actual database operations
 // These are mock implementations for demonstration
@@ -22,45 +23,36 @@ export const registerClient = asyncHandler(async (req: Request, res: Response): 
   }
 
   try {
-    // Generate client ID and API key
-    const clientId = uuidv4();
+    // Generate API key
     const { apiKey, keyId } = generateApiKey();
     const hashedKey = await hashApiKey(apiKey);
 
-    // TODO: Save client to database
-    const clientData = {
-      id: clientId,
+    // Save client to storage
+    const client = await ClientModel.create({
       name: name.trim(),
       email,
-      rateLimit: Math.max(1, Math.min(rateLimit, 1000)), // Limit between 1 and 1000
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      rateLimit: Math.max(1, Math.min(rateLimit, 1000)) // Limit between 1 and 1000
+    });
 
-    // TODO: Save API key to database
-    const apiKeyData = {
-      keyId,
-      clientId,
-      hashedKey,
-      prefix: apiKey.substring(3, 11),
-      isActive: true,
-      createdAt: new Date(),
-      lastUsedAt: null
-    };
+    // Save API key to storage
+    await ApiKeyModel.create({
+      clientId: client.id,
+      keyHash: hashedKey,
+      keyPrefix: apiKey.substring(3, 11)
+    });
 
-    logAuth('client_registered', clientId, {
+    logAuth('client_registered', client.id, {
       name,
       email,
-      rateLimit: clientData.rateLimit
+      rateLimit: client.rateLimit
     });
 
     const response: ClientResponse = {
-      id: clientId,
-      name: clientData.name,
+      id: client.id,
+      name: client.name,
       apiKey,
-      rateLimit: clientData.rateLimit,
-      createdAt: clientData.createdAt
+      rateLimit: client.rateLimit,
+      createdAt: client.createdAt
     };
 
     res.status(201).json({
@@ -83,12 +75,12 @@ export const generateToken = asyncHandler(async (req: Request, res: Response): P
   }
 
   try {
-    // TODO: Verify client exists and is active in database
-    const client = {
-      id: clientId,
-      name: 'Demo Client', // Should come from database
-      isActive: true
-    };
+    // Verify client exists and is active in storage
+    const client = await ClientModel.findById(clientId);
+
+    if (!client) {
+      throw new ValidationError('Client not found');
+    }
 
     if (!client.isActive) {
       throw new ValidationError('Client is not active');

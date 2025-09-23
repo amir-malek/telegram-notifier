@@ -4,6 +4,7 @@ import { checkDatabaseHealth } from '../database/connection';
 import { checkRedisHealth, isRedisEnabled } from '../database/redis';
 import { checkQueueHealth } from '../queue/manager';
 import authRoutes from '../auth/routes';
+import { notificationRoutes } from './notifications/routes';
 
 export const setupRoutes = (app: Express): void => {
   // API version prefix
@@ -99,16 +100,11 @@ export const setupRoutes = (app: Express): void => {
 
   // Route handlers
   app.use(`${apiPrefix}/auth`, authRoutes);
+  app.use(`${apiPrefix}/notifications`, notificationRoutes);
 
   // TODO: Add remaining route handlers when implemented
-  // app.use(`${apiPrefix}/notifications`, notificationRoutes);
   // app.use(`${apiPrefix}/templates`, templateRoutes);
   // app.use(`${apiPrefix}/channels`, channelRoutes);
-
-  // Placeholder routes for now
-  app.get(`${apiPrefix}/notifications`, (req, res) => {
-    res.json({ message: 'Notification endpoints - Coming soon' });
-  });
 
   app.get(`${apiPrefix}/templates`, (req, res) => {
     res.json({ message: 'Template endpoints - Coming soon' });

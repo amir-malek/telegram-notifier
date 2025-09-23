@@ -70,13 +70,13 @@ export class InMemoryQueue extends EventEmitter {
         attempts: options.attempts || 3,
         backoff: options.backoff || { type: 'exponential', delay: 5000 },
         removeOnComplete: options.removeOnComplete || 50,
-        removeOnFail: options.removeOnFail || 20,
+        removeOnFail: options.removeOnFail || 20
       },
       status: options.delay && options.delay > 0 ? 'delayed' : 'waiting',
       timestamp: now,
       attemptsMade: 0,
       processAfter: now + (options.delay || 0),
-      lastError: undefined,
+      lastError: undefined
     };
 
     this.jobs.set(jobId, job);
@@ -90,7 +90,7 @@ export class InMemoryQueue extends EventEmitter {
     logQueue('added', jobId, this.queueName, {
       jobName,
       priority: job.options.priority,
-      delay: job.options.delay,
+      delay: job.options.delay
     });
 
     this.emit('added', job);
@@ -178,7 +178,7 @@ export class InMemoryQueue extends EventEmitter {
     logQueue('processing', job.id, this.queueName, {
       jobName: job.name,
       attempt: job.attemptsMade + 1,
-      maxAttempts: job.options.attempts,
+      maxAttempts: job.options.attempts
     });
 
     try {
@@ -196,7 +196,7 @@ export class InMemoryQueue extends EventEmitter {
 
       logQueue('completed', job.id, this.queueName, {
         processingTime: Date.now() - startTime,
-        attempts: job.attemptsMade,
+        attempts: job.attemptsMade
       });
 
       this.emit('completed', job, result);
@@ -210,7 +210,7 @@ export class InMemoryQueue extends EventEmitter {
       logQueue('failed', job.id, this.queueName, {
         error: errorMessage,
         attempt: job.attemptsMade,
-        maxAttempts: job.options.attempts,
+        maxAttempts: job.options.attempts
       });
 
       if (job.attemptsMade < job.options.attempts) {
@@ -236,7 +236,7 @@ export class InMemoryQueue extends EventEmitter {
     logQueue('retry', job.id, this.queueName, {
       attempt: job.attemptsMade,
       maxAttempts: job.options.attempts,
-      retryDelay: backoffDelay,
+      retryDelay: backoffDelay
     });
 
     this.emit('retry', job);
@@ -301,7 +301,7 @@ export class InMemoryQueue extends EventEmitter {
       active: this.activeJobs.size,
       completed: this.completedJobs.length,
       failed: this.failedJobs.length,
-      delayed: this.delayedQueue.length,
+      delayed: this.delayedQueue.length
     };
   }
 

@@ -69,7 +69,7 @@ export class InMemoryStorageAdapter extends StorageAdapter {
 
   async findClientById(id: string): Promise<Client | null> {
     const record = this.clients.get(id);
-    if (!record || !record.data.isActive) return null;
+    if (!record?.data.isActive) return null;
     return this.mapClientRecord(record);
   }
 
@@ -207,7 +207,7 @@ export class InMemoryStorageAdapter extends StorageAdapter {
 
   async findTemplateById(id: string): Promise<Template | null> {
     const record = this.templates.get(id);
-    if (!record || !record.data.isActive) return null;
+    if (!record?.data.isActive) return null;
     return record.data;
   }
 

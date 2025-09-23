@@ -383,7 +383,7 @@ export class TelegramChannel {
     url: string;
     source?: string;
   }): string {
-    let message = `🆕 *New Job Alert*\n\n`;
+    let message = '🆕 *New Job Alert*\n\n';
     message += `*${TelegramChannel.escapeMarkdown(job.title)}*\n`;
     message += `🏢 ${TelegramChannel.escapeMarkdown(job.company)}\n`;
 

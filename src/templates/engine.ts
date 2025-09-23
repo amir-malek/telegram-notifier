@@ -157,7 +157,7 @@ export class TemplateEngine {
       if (!compiledTemplate) {
         compiledTemplate = Handlebars.compile(template.content, {
           strict: false, // Allow missing variables
-          noEscape: template.channel === 'html', // Don't escape HTML for HTML templates
+          noEscape: template.channel === 'html' // Don't escape HTML for HTML templates
         });
 
         this.compiledTemplates.set(cacheKey, compiledTemplate);

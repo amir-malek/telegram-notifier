@@ -1,7 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { AuthTokenPayload } from '../types';
 import { logger } from '../monitoring/logger';
+import dotenv from 'dotenv';
 
+dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
@@ -106,7 +108,7 @@ export const decodeToken = (token: string): any => {
 export const getTokenExpiration = (token: string): Date | null => {
   try {
     const decoded = jwt.decode(token) as any;
-    if (decoded && decoded.exp) {
+    if (decoded?.exp) {
       return new Date(decoded.exp * 1000);
     }
     return null;

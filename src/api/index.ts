@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { notificationRoutes } from './notifications/routes';
 import { docsRoutes } from './docs/routes';
+import authRoutes from '../auth/routes';
 import { errorHandler } from './middleware/errorHandler';
 import { rateLimiters } from './middleware/rateLimit';
 import cors from 'cors';
@@ -17,9 +18,9 @@ router.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
+      imgSrc: ["'self'", 'data:', 'https:']
+    }
+  }
 }));
 
 // CORS configuration
@@ -27,7 +28,7 @@ router.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
 }));
 
 // Compression
@@ -72,6 +73,7 @@ router.use((req, res, next) => {
 router.use(rateLimiters.general);
 
 // API Routes
+router.use('/auth', authRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/docs', docsRoutes);
 
@@ -92,6 +94,7 @@ router.get('/', (req, res) => {
     version: '1.0.0',
     description: 'Multi-channel notification service with template support',
     endpoints: {
+      auth: '/api/auth',
       notifications: '/api/notifications',
       health: '/api/health',
       docs: '/api/docs'
@@ -111,6 +114,7 @@ router.use('*', (req, res) => {
     error: 'API endpoint not found',
     path: req.originalUrl,
     availableEndpoints: [
+      '/api/auth',
       '/api/notifications',
       '/api/health',
       '/api/docs'

@@ -25,9 +25,9 @@ export const connectRedis = async (): Promise<RedisClientType | null> => {
       url: process.env.REDIS_URL || 'redis://localhost:6379',
       socket: {
         connectTimeout: 10000,
-        lazyConnect: true,
+        lazyConnect: true
       },
-      password: process.env.REDIS_PASSWORD || undefined,
+      password: process.env.REDIS_PASSWORD || undefined
     };
 
     redisClient = createClient(redisConfig);

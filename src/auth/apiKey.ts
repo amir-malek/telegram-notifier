@@ -141,7 +141,7 @@ export const validateApiKey = async (apiKey: string): Promise<{ isValid: boolean
 
     // Find the key by prefix
     const keyData = await ApiKeyModel.findByPrefix(prefix);
-    if (!keyData || !keyData.isActive) {
+    if (!keyData?.isActive) {
       return { isValid: false };
     }
 

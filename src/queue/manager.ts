@@ -39,8 +39,8 @@ const initializeRedisQueues = async (): Promise<void> => {
     redis: {
       port: parseInt(process.env.REDIS_PORT || '6379'),
       host: process.env.REDIS_HOST || 'localhost',
-      password: process.env.REDIS_PASSWORD || undefined,
-    },
+      password: process.env.REDIS_PASSWORD || undefined
+    }
   };
 
   const bullNotificationQueue = new Queue('notification processing', redisConfig);
@@ -113,10 +113,66 @@ const setupJobProcessors = (): void => {
       recipient
     });
 
-    // TODO: Implement actual notification sending logic
-    // This will be implemented when we create the channel handlers
+    try {
+      // Import models here to avoid circular dependency
+      const { NotificationModel, DeliveryLogModel } = await import('../models');
 
-    return { success: true, notificationId };
+      // Update notification status to processing
+      await NotificationModel.updateStatus(notificationId, 'processing');
+
+      // Send notification based on channel
+      let result;
+      if (channel === 'telegram') {
+        const { TelegramChannel } = await import('../channels/telegram');
+        const telegramChannel = new TelegramChannel({
+          botToken: process.env.TELEGRAM_BOT_TOKEN || ''
+        });
+        result = await telegramChannel.sendMessage({
+          chatId: recipient,
+          message: message
+        });
+      } else {
+        throw new Error(`Unsupported channel: ${channel}`);
+      }
+
+      if (result.success) {
+        // Update notification status to sent
+        await NotificationModel.updateStatus(notificationId, 'sent', undefined, result.messageId?.toString());
+
+        // Log successful delivery
+        await DeliveryLogModel.create({
+          notificationId,
+          attempt: 1,
+          status: 'success',
+          responseData: result.messageId ? { messageId: result.messageId } : undefined,
+          processingTimeMs: Date.now() - job.timestamp
+        });
+
+        logger.info(`Notification ${notificationId} sent successfully via ${channel}`);
+        return { success: true, notificationId, messageId: result.messageId };
+      } else {
+        throw new Error(result.error || 'Failed to send notification');
+      }
+    } catch (error) {
+      logger.error(`Failed to send notification ${notificationId}:`, error);
+
+      // Import models for error handling
+      const { NotificationModel, DeliveryLogModel } = await import('../models');
+
+      // Update notification status to failed
+      await NotificationModel.updateStatus(notificationId, 'failed', (error as Error).message);
+
+      // Log failed delivery
+      await DeliveryLogModel.create({
+        notificationId,
+        attempt: 1,
+        status: 'failed',
+        errorMessage: (error as Error).message,
+        processingTimeMs: Date.now() - job.timestamp
+      });
+
+      throw error;
+    }
   });
 
   // Process template rendering jobs

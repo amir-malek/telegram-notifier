@@ -26,7 +26,7 @@ export class BullQueueAdapter implements IQueue {
       attempts: options?.attempts,
       backoff: options?.backoff,
       removeOnComplete: options?.removeOnComplete,
-      removeOnFail: options?.removeOnFail,
+      removeOnFail: options?.removeOnFail
     });
 
     return this.convertBullJobToQueueJob(bullJob);
@@ -84,7 +84,7 @@ export class BullQueueAdapter implements IQueue {
       data: bullJob.data,
       opts: bullJob.opts,
       timestamp: bullJob.timestamp,
-      attemptsMade: bullJob.attemptsMade,
+      attemptsMade: bullJob.attemptsMade
     };
   }
 }
@@ -172,10 +172,10 @@ export class InMemoryQueueAdapter implements IQueue {
       opts: {
         priority: inMemoryJob.options.priority,
         delay: inMemoryJob.options.delay,
-        attempts: inMemoryJob.options.attempts,
+        attempts: inMemoryJob.options.attempts
       },
       timestamp: inMemoryJob.timestamp,
-      attemptsMade: inMemoryJob.attemptsMade,
+      attemptsMade: inMemoryJob.attemptsMade
     };
   }
 }
