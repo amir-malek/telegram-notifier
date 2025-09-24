@@ -87,12 +87,11 @@ async function startServer() {
 
     // Start server
     const port = parseInt(process.env.PORT || '3000');
-    const host = process.env.HOST || 'localhost';
 
-    server.listen(port, host, () => {
+    server.listen(port, () => {
       const currentStorageMode = getStorageMode();
       logger.info(`🚀 Notification Service started successfully`);
-      logger.info(`📡 Server running on http://${host}:${port}`);
+      logger.info(`📡 Server running on http://localhost:${port}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`💾 Storage: ${currentStorageMode}`);
       logger.info(`📊 Metrics available on port ${process.env.PROMETHEUS_PORT || '9090'}`);
