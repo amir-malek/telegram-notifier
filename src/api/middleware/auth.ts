@@ -65,7 +65,7 @@ export async function authenticateRequest(
           client = {
             id: 'default-client-id',
             name: 'Default Development Client',
-            email: 'dev@example.com',
+            apiKeyHash: 'default-hash',
             rateLimit: 1000,
             isActive: true,
             createdAt: new Date(),
