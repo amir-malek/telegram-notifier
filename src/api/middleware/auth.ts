@@ -185,3 +185,49 @@ export function checkClientRateLimit(req: AuthenticatedRequest, res: Response, n
   // This is handled by the rate limiting middleware using the client ID
   next();
 }
+
+// Middleware to extract channel credentials from headers
+export function extractChannelCredentials(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  try {
+    const channelCredentials: any = {};
+
+    // Extract Telegram bot token from header
+    const telegramBotToken = req.headers['x-telegram-bot-token'] as string;
+
+    if (telegramBotToken) {
+      // Validate token format: <digits>:<alphanumeric>
+      const telegramTokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
+      if (!telegramTokenPattern.test(telegramBotToken)) {
+        res.status(400).json({
+          error: 'Invalid Telegram bot token format',
+          message: 'Telegram bot token must be in format: <bot_id>:<token>'
+        });
+        return;
+      }
+
+      channelCredentials.telegram = {
+        botToken: telegramBotToken
+      };
+
+      logger.debug('Telegram credentials extracted from header', {
+        tokenPrefix: telegramBotToken.substring(0, 8) + '...'
+      });
+    }
+
+    // Store credentials in request object
+    req.channelCredentials = channelCredentials;
+
+    next();
+
+  } catch (error) {
+    logger.error('Error extracting channel credentials:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to process channel credentials'
+    });
+  }
+}

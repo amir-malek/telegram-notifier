@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validator';
-import { authenticateRequest } from '../middleware/auth';
+import { authenticateRequest, extractChannelCredentials } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import {
   sendNotification,
@@ -22,8 +22,9 @@ import {
 
 const router = Router();
 
-// Apply authentication to all notification routes
+// Apply authentication and credential extraction to all notification routes
 router.use(authenticateRequest);
+router.use(extractChannelCredentials);
 
 // Send single notification
 router.post('/',

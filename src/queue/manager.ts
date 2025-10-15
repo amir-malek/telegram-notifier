@@ -5,6 +5,7 @@ import { metrics } from '../monitoring/metrics';
 import { IQueue, QueueJob, IQueueManager } from './interface';
 import { BullQueueAdapter, InMemoryQueueAdapter } from './adapters';
 import { InMemoryQueue } from './inMemoryQueue';
+import { ChannelCredentials } from '../types';
 
 // Queue instances
 let notificationQueue: IQueue | null = null;
@@ -105,7 +106,7 @@ const setupJobProcessors = (): void => {
 
   // Process notification jobs
   notificationQueue.process('send_notification', parseInt(process.env.QUEUE_CONCURRENCY || '5'), async (job: QueueJob) => {
-    const { notificationId, channel, recipient, message, templateData } = job.data;
+    const { notificationId, channel, recipient, message, templateData, channelCredentials } = job.data;
 
     logQueue('processing', job.id.toString(), 'notification', {
       notificationId,
@@ -123,9 +124,16 @@ const setupJobProcessors = (): void => {
       // Send notification based on channel
       let result;
       if (channel === 'telegram') {
+        // Get bot token from credentials
+        const botToken = channelCredentials?.telegram?.botToken;
+
+        if (!botToken) {
+          throw new Error('Telegram bot token not provided in channel credentials');
+        }
+
         const { TelegramChannel } = await import('../channels/telegram');
         const telegramChannel = new TelegramChannel({
-          botToken: process.env.TELEGRAM_BOT_TOKEN || ''
+          botToken
         });
         result = await telegramChannel.sendMessage({
           chatId: recipient,
@@ -198,7 +206,8 @@ export const addNotificationJob = async (
     priority?: 'high' | 'medium' | 'low';
     delay?: number;
     attempts?: number;
-  } = {}
+  } = {},
+  channelCredentials?: ChannelCredentials
 ): Promise<QueueJob> => {
   if (!notificationQueue) {
     throw new Error('Notification queue not initialized');
@@ -210,7 +219,8 @@ export const addNotificationJob = async (
     notificationId,
     channel,
     recipient,
-    message
+    message,
+    channelCredentials
   }, {
     priority,
     delay: options.delay || 0,

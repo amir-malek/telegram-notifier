@@ -235,7 +235,15 @@ export interface ApiKeyData {
   isActive: boolean;
 }
 
+// Channel credentials provided by client
+export interface ChannelCredentials {
+  telegram?: {
+    botToken: string;
+  };
+}
+
 // Authenticated request with client attached
 export interface AuthenticatedRequest extends Request {
   client?: Client | null;
+  channelCredentials?: ChannelCredentials;
 }

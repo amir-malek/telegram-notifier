@@ -2,10 +2,15 @@
 
 This directory contains the complete API documentation for the Notification Service.
 
+> **⚠️ v2.0 Breaking Change**: Telegram bot tokens must now be provided via `X-Telegram-Bot-Token` header.
+> See [MIGRATION.md](../MIGRATION.md) for upgrade instructions.
+
 ## 📚 Documentation Files
 
 - **`openapi.yml`** - Complete OpenAPI 3.0 specification
 - **`README.md`** - This documentation overview
+- **`../MIGRATION.md`** - Migration guide from v1.x to v2.0
+- **`../CHANGELOG.md`** - Version history and changes
 
 ## 🌐 Online Documentation
 
@@ -32,6 +37,25 @@ The API supports two authentication methods:
    Authorization: ApiKey nf_xxxxxxxxxxxxxxxx
    ```
 
+### Channel Credentials (Required for Telegram)
+
+**🔑 Passive Gateway Architecture (v2.0+)**
+
+The service operates as a passive gateway - clients provide their own bot credentials via headers:
+
+- **Telegram Bot Token**: `X-Telegram-Bot-Token: <bot_id>:<token>`
+
+**Example:**
+```bash
+X-Telegram-Bot-Token: 123456:ABC-DEF1234567890abcdefghijklmnop
+```
+
+**Important Notes:**
+- Bot tokens are NOT stored on the server
+- Tokens only exist in memory during request processing
+- Each client can use their own Telegram bot
+- Token format must be: `<numbers>:<alphanumeric_string>`
+
 ### Base URL
 
 - **Development**: `http://localhost:3000/api`
@@ -56,6 +80,7 @@ The API supports two authentication methods:
 curl -X POST http://localhost:3000/api/notifications \
   -H "Content-Type: application/json" \
   -H "Authorization: ApiKey nf_your_api_key" \
+  -H "X-Telegram-Bot-Token: 123456:ABC-DEF1234567890abcdefghijklmnop" \
   -d '{
     "channel": "telegram",
     "recipient": "@username",
@@ -70,6 +95,7 @@ curl -X POST http://localhost:3000/api/notifications \
 curl -X POST http://localhost:3000/api/notifications \
   -H "Content-Type: application/json" \
   -H "Authorization: ApiKey nf_your_api_key" \
+  -H "X-Telegram-Bot-Token: 123456:ABC-DEF1234567890abcdefghijklmnop" \
   -d '{
     "channel": "telegram",
     "recipient": "@username",
@@ -90,6 +116,7 @@ curl -X POST http://localhost:3000/api/notifications \
 curl -X POST http://localhost:3000/api/notifications/schedule \
   -H "Content-Type: application/json" \
   -H "Authorization: ApiKey nf_your_api_key" \
+  -H "X-Telegram-Bot-Token: 123456:ABC-DEF1234567890abcdefghijklmnop" \
   -d '{
     "channel": "telegram",
     "recipient": "@username",
@@ -105,6 +132,7 @@ curl -X POST http://localhost:3000/api/notifications/schedule \
 curl -X POST http://localhost:3000/api/notifications/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: ApiKey nf_your_api_key" \
+  -H "X-Telegram-Bot-Token: 123456:ABC-DEF1234567890abcdefghijklmnop" \
   -d '{
     "channel": "telegram",
     "template": "550e8400-e29b-41d4-a716-446655440000",

@@ -27,6 +27,13 @@ export const sendNotification = asyncHandler(async (req: AuthenticatedRequest, r
   }: NotificationRequest = req.body;
 
   try {
+    // Validate that credentials are provided for the channel
+    if (channel === 'telegram') {
+      if (!req.channelCredentials?.telegram?.botToken) {
+        throw new ValidationError('Telegram bot token is required. Provide X-Telegram-Bot-Token header.');
+      }
+    }
+
     // Create notification record
     const notification = await NotificationModel.create({
       clientId: req.client.id,
@@ -51,7 +58,8 @@ export const sendNotification = asyncHandler(async (req: AuthenticatedRequest, r
         priority,
         delay: scheduledAt ? new Date(scheduledAt).getTime() - Date.now() : 0,
         attempts: 3
-      }
+      },
+      req.channelCredentials
     );
 
     logNotification('created', notification.id, channel, {
@@ -91,6 +99,13 @@ export const sendBatchNotifications = asyncHandler(async (req: AuthenticatedRequ
   }: BatchNotificationRequest = req.body;
 
   try {
+    // Validate that credentials are provided for the channel
+    if (channel === 'telegram') {
+      if (!req.channelCredentials?.telegram?.botToken) {
+        throw new ValidationError('Telegram bot token is required. Provide X-Telegram-Bot-Token header.');
+      }
+    }
+
     const results = [];
     const { batchSize = 10, delayBetween = 1000, deduplicate = false } = options;
 
@@ -120,7 +135,8 @@ export const sendBatchNotifications = asyncHandler(async (req: AuthenticatedRequ
               channel,
               notif.recipient,
               notif.message || '',
-              { priority: 'medium' }
+              { priority: 'medium' },
+              req.channelCredentials
             );
 
             return {
@@ -194,6 +210,13 @@ export const scheduleNotification = asyncHandler(async (req: AuthenticatedReques
   } = req.body;
 
   try {
+    // Validate that credentials are provided for the channel
+    if (channel === 'telegram') {
+      if (!req.channelCredentials?.telegram?.botToken) {
+        throw new ValidationError('Telegram bot token is required. Provide X-Telegram-Bot-Token header.');
+      }
+    }
+
     const scheduledDate = new Date(scheduledAt);
     const delay = scheduledDate.getTime() - Date.now();
 
@@ -221,7 +244,8 @@ export const scheduleNotification = asyncHandler(async (req: AuthenticatedReques
       channel,
       recipient,
       message || '',
-      { priority, delay }
+      { priority, delay },
+      req.channelCredentials
     );
 
     logNotification('scheduled', notification.id, channel, {
